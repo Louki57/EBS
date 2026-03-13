@@ -3,7 +3,8 @@
     {$DEBUG}
 }
 
-{$SERVER_NAME}
+# {$SERVER_NAME}
+:80
 
 log
 

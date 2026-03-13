@@ -14,7 +14,7 @@ REDIS       = redis-cli
 PHP_CONT  = $(DOCKER_COMP) exec php
 
 # see https://hub.docker.com/r/gmolaire/yarn
-YARN_CONT = $(DOCKER) run -it --rm -w "/usr/app" -v "${PWD}":/usr/app gmolaire/yarn yarn
+YARN_CONT = $(DOCKER) run -it --rm -w "/usr/app" -v "${PWD}/home/ubuntu/EBS":/usr/app gmolaire/yarn yarn
 
 # Main executables
 PHP          = $(PHP_CONT) php
