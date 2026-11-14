@@ -4,32 +4,53 @@ on:
   workflow_call:
 
 jobs:
-  build-push-php:
-    environment: PROD
+  # Push vers le registry Scaleway. Le déploiement est ensuite géré par ArgoCD (cf ApplicationSet,
+  # opentofu-scaleway-infra-mut/2_environments/3_k8s_objects/argocd_pr_sites.tf, qui lit les tags
+  # "sha-xxxxxxx" sur ce registry). Environnements permanents (ArgoCD Image Updater, argocd_sites.tf,
+  # tags "{workspace}-xxxxxxx") : push sur staging -> nonprod, push sur main -> prod.
+  build-push-scaleway:
+    strategy:
+      matrix:
+        include:
+        - target: app_php
+          image_name: ${{ vars.IMAGE_NAME_PHP }}
+        - target: app_caddy
+          image_name: ${{ vars.IMAGE_NAME_CADDY }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-    - name: Build/Push
-      uses: coopTilleuls/action-docker-build-push@v10
+    - uses: actions/checkout@v7
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Login to Scaleway Container Registry
+      uses: docker/login-action@v4
       with:
-        IMAGE_NAME: ${{ vars.IMAGE_NAME_PHP }}
-        BUILD_CONTEXT: .
-        BUILD_TARGET: app_php
-        REGISTRY_JSON_KEY: ${{ secrets.GITHUB_TOKEN }}
-        IMAGE_REPOSITORY: ${{ vars.IMAGE_REPO }}
-         
-  build-push-caddy:
-    environment: PROD
-    # Same Dockerfile as php, with a build target which is after
-    needs: [build-push-php]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-    - name: Build/Push
-      uses: coopTilleuls/action-docker-build-push@v10
+        registry: rg.fr-par.scw.cloud
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v6
       with:
-        IMAGE_NAME: ${{ vars.IMAGE_NAME_CADDY }}
-        BUILD_CONTEXT: .
-        BUILD_TARGET: app_caddy
-        REGISTRY_JSON_KEY: ${{ secrets.GITHUB_TOKEN }}
-        IMAGE_REPOSITORY: ${{ vars.IMAGE_REPO }}
+        images: ${{vars.REGISTRY_NAME}}/${{ matrix.image_name }}
+        tags: |
+          type=raw,value=prod-{{sha}},enable=${{ github.ref == 'refs/heads/main' }}
+          type=raw,value=nonprod-{{sha}},enable=${{ github.ref == 'refs/heads/staging' }}
+          type=sha,enable=${{ github.event_name == 'pull_request' }}
+
+    - name: Build/Push
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        target: ${{ matrix.target }}
+        tags: ${{ steps.meta.outputs.tags }}
+        push: true
+        cache-from: |
+          type=gha,scope=${{ github.ref }}-${{ matrix.target }}
+          type=gha,scope=refs/heads/staging-${{ matrix.target }}
+          type=gha,scope=refs/heads/main-${{ matrix.target }}
+        cache-to: |
+          type=gha,scope=${{ github.ref }}-${{ matrix.target }},mode=max

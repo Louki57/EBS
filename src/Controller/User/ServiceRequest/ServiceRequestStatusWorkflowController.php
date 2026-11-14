@@ -19,7 +19,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\EnumRequirement;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -99,6 +99,10 @@ class ServiceRequestStatusWorkflowController extends AbstractController
 
             return $this->applyAndRedirect($id, $serviceRequest, $transition);
         }
+
+        // the refused dates were written in the entity by the form: reload it, so
+        // that the conversation page, which flushes, does not save them
+        $this->doctrine->refresh($serviceRequest);
 
         return $this->forward(ConversationController::class, compact('id'));
     }
